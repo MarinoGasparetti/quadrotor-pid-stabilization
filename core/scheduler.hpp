@@ -1,3 +1,4 @@
+// core/scheduler.hpp
 #ifndef SCHEDULER_HPP
 #define SCHEDULER_HPP
 
@@ -6,63 +7,72 @@
 #include <functional>
 #include <atomic>
 #include <vector>
+#include "pid_controller.hpp"
+#include "disturbance_observer.hpp"
 
 /**
- * @brief Scheduler asincrono per la gestione concorrente dei task del drone.
- * Separa il loop di stabilizzazione ad alta frequenza (Inner) 
- * dal loop di navigazione/statico a frequenza ridotta (Outer).
+ * @brief Scheduler asincrono per la gestione concorrente.
+ * Connette il DisturbanceObserver al PID Controller tramite i task Inner e Outer.
  */
 class DroneScheduler {
 public:
-    struct Task {
-        std::function<void()> func;
-        double frequency_hz;
-        std::chrono::steady_clock::time_point last_run;
-    };
+    DroneScheduler(PIDController& pid, DisturbanceObserver& observer) 
+        : pid_(pid), observer_(observer), running_(false), user_pitch_target_(0.0), current_imu_pitch_(0.0) {}
 
-    DroneScheduler() : running_(false) {}
-
-    ~DroneScheduler() {
-        stop();
-    }
-
-    void addTask(std::function<void()> func, double frequency_hz) {
-        tasks_.push_back({func, frequency_hz, std::chrono::steady_clock::now()});
-    }
+    ~DroneScheduler() { stop(); }
 
     void start() {
         running_ = true;
-        scheduler_thread_ = std::thread(&DroneScheduler::run, this);
+        // Task 1: Inner Loop - Alta frequenza (400Hz)
+        // Si occupa solo della stabilizzazione immediata
+        scheduler_threads_.emplace_back([this]() {
+            while (running_) {
+                double dt = 0.0025; // 400Hz
+                // Applica il comando corretto dal vento
+                double output = pid_.compute(corrected_target_.load(), current_imu_pitch_.load(), dt);
+                // Qui l'output verrebbe inviato ai motori
+                std::this_thread::sleep_for(std::chrono::microseconds(2500));
+            }
+        });
+
+        // Task 2: Outer Loop - Media frequenza (50Hz)
+        // Calcola la compensazione del vento e aggiorna il target per l'Inner Loop
+        scheduler_threads_.emplace_back([this]() {
+            while (running_) {
+                double dt = 0.02; // 50Hz
+                
+                // Calcola la correzione basata sulla "derivata dell'errore marginale"
+                double wind_offset = observer_.estimateCorrection(user_pitch_target_.load(), current_imu_pitch_.load(), dt);
+                
+                // Il target reale per i motori è il comando utente + la compensazione vento
+                corrected_target_.store(user_pitch_target_.load() + wind_offset);
+                
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+        });
     }
 
     void stop() {
         running_ = false;
-        if (scheduler_thread_.joinable()) {
-            scheduler_thread_.join();
+        for (auto& t : scheduler_threads_) {
+            if (t.joinable()) t.join();
         }
     }
+
+    // Metodi per aggiornare gli input dall'esterno (es. radiocomando e sensori)
+    void setUserInput(double pitch) { user_pitch_target_.store(pitch); }
+    void updateIMU(double pitch) { current_imu_pitch_.store(pitch); }
 
 private:
-    void run() {
-        while (running_) {
-            auto now = std::chrono::steady_clock::now();
-            
-            for (auto& task : tasks_) {
-                auto interval = std::chrono::nanoseconds(static_cast<long long>(1e9 / task.frequency_hz));
-                if (now - task.last_run >= interval) {
-                    task.func();
-                    task.last_run = now;
-                }
-            }
-            
-            // Piccola pausa per non saturare il core se non ci sono task pronti
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
-        }
-    }
-
+    PIDController& pid_;
+    DisturbanceObserver& observer_;
     std::atomic<bool> running_;
-    std::vector<Task> tasks_;
-    std::thread scheduler_thread_;
+    std::vector<std::thread> scheduler_threads_;
+
+    // Stati condivisi tra i thread (thread-safe)
+    std::atomic<double> user_pitch_target_;
+    std::atomic<double> current_imu_pitch_;
+    std::atomic<double> corrected_target_;
 };
 
 #endif // SCHEDULER_HPP
