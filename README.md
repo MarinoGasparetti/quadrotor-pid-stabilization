@@ -1,32 +1,33 @@
-# Quadrotor PID Stabilization — Advanced Concurrency & Wind Rejection
+# Quadrotor PID Stabilization — Technical Architecture
 
-Sistema di controllo avanzato per droni, ottimizzato per la stabilità in hovering e la precisione in volo dinamico attraverso l'uso di logiche concorrenti e compensazione dei disturbi ambientali.
+High-performance control system for UAVs, featuring multi-rate task scheduling and active disturbance rejection.
 
-## Caratteristiche Principali
+## Technical Specifications
 
-- **Gain Scheduling (Static/Dynamic)**: Il `PIDController` cambia automaticamente i parametri tra hovering (precisione statica) e volo traslato (reattività dinamica).
-- **Disturbance Observer**: Un modulo dedicato che analizza la derivata dell'errore marginale tra il comando utente e la risposta dell'IMU per rilevare e contrastare istantaneamente folate di vento.
-- **DroneScheduler (Multi-threaded)**:
-  - **Inner Loop (400Hz)**: Task ad alta priorità per la stabilizzazione dell'assetto.
-  - **Outer Loop (50Hz)**: Task per la logica di navigazione e compensazione del vento.
+- **Dual-Rate Concurrency**:
+  - **Inner Loop (High-Freq, 400Hz+)**: Critical attitude stabilization.
+  - **Outer Loop (Low-Freq, 50Hz)**: Navigation, gain scheduling, and disturbance observation.
+- **Active Gain Scheduling**: Automated transition between `Static` (high-precision hovering) and `Dynamic` (high-responsiveness) PID profiles.
+- **Disturbance Observer (ADRC Lite)**: Implements error marginal derivative analysis to isolate environmental forces (wind) from user intent.
+- **Trajectory Integrity**: Corrects the PID setpoint based on the delta between commanded pitch and inertial response, ensuring trajectory maintenance under external load.
 
-## Struttura del Progetto
+## Project Structure
 
-- `core/` — Logica di controllo in C++ (Header-only)
-  - `pid_controller.hpp`: PID avanzato con supporto profili duali.
-  - `disturbance_observer.hpp`: Calcolo della correzione predittiva basata sulla traiettoria utente.
-  - `scheduler.hpp`: Orchestratore multi-thread per loop a frequenze differenziate.
-- `simulation/` — Test e Validazione
-  - `pid_sim.py`: Simulatore Python che ora include la modellazione di raffiche di vento per testare l'Observer.
+- `core/` (C++11/17)
+  - `pid_controller.hpp`: Dual-profile PID implementation.
+  - `disturbance_observer.hpp`: Wind rejection and trajectory correction logic.
+  - `scheduler.hpp`: Multi-threaded task orchestrator.
+- `simulation/` (Python 3)
+  - `pid_sim.py`: Numerical validation of wind rejection algorithms.
 
-## Logica Filosofica del Controllo
+## Operational Logic
 
-L'errore non è trattato come una semplice differenza di posizione, ma come la deviazione tra l'**intento dinamico dell'utente** e la **realtà inerziale**. Il sistema tende asintoticamente verso il comando utente, "indurendo" la resistenza alle forze esterne senza sacrificare la fluidità dei movimenti.
+The system defines the control error as the deviation between the **user-commanded dynamic vector** and the **actual inertial state**. By applying a derivative correction to the command margin, the observer predicts and counteracts external forces before they translate into significant positional drift.
 
-## Esecuzione Simulazione
+## Simulation & Validation
 
 ```bash
 pip install numpy matplotlib
 python simulation/pid_sim.py
 ```
-Guarda `simulation_result.png` per vedere come il drone reagisce alle raffiche di vento mantenendo il pitch impostato.
+Output: `simulation_result.png` displays the performance delta between standard PID and the Active Disturbance Rejection layer.
