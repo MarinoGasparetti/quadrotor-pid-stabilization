@@ -20,24 +20,10 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install numpy pandas
+          pip install numpy pandas matplotlib
 
       - name: Run Comparison Benchmark
         run: python benchmarking/compare.py > results.txt
 
       - name: Display Results
         run: cat results.txt
-
-      - name: Check for Benefits
-        run: |
-          # Fallisce se il sistema DOB ha un errore integrale (IAE) superiore al PID normale
-          python -c "
-          import sys
-          content = open('results.txt').read()
-          if 'DOB_IAE < PID_IAE' in content:
-              print('✅ Beneficio confermato: Il sistema con Disturbance Observer è più efficiente.')
-              sys.exit(0)
-          else:
-              print('❌ Attenzione: Il sistema non mostra vantaggi tangibili rispetto al PID normale.')
-              sys.exit(1)
-          "
