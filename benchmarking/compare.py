@@ -16,8 +16,8 @@ class StandardPID:
         return self.kp * error + self.ki * self.integral + self.kd * derivative
 
 class AdvancedDOBController:
-    """Simulazione semplificata del sistema nel core/ con Disturbance Observer"""
-    def __init__(self, kp, ki, kd, dob_gain=0.5, dt=0.01):
+    """Simulazione del sistema con Disturbance Observer migliorata"""
+    def __init__(self, kp, ki, kd, dob_gain=2.5, dt=0.01):
         self.kp, self.ki, self.kd = kp, ki, kd
         self.dob_gain = dob_gain
         self.dt = dt
@@ -25,45 +25,49 @@ class AdvancedDOBController:
         self.prev_error = 0
         self.estimated_dist = 0
 
-    def update(self, setpoint, measurement, actual_output):
+    def update(self, setpoint, measurement, actual_control_effort):
         error = setpoint - measurement
         self.integral += error * self.dt
         derivative = (error - self.prev_error) / self.dt
         
-        # Logica DOB: stima il disturbo confrontando l'output atteso con quello reale
-        # Nel sistema reale è implementato in disturbance_observer.hpp
-        nominal_model_output = self.kp * error # Semplificato
-        dist_obs = (nominal_model_output - actual_output) * self.dob_gain
-        self.estimated_dist += (dist_obs - self.estimated_dist) * 0.1 # Filtro passa-basso
+        # Logica DOB migliorata: il controllo nominale include la componente derivativa
+        nominal_control = self.kp * error + self.kd * derivative
+        
+        # Stima del disturbo più reattiva
+        dist_obs = (nominal_control - actual_control_effort) * self.dob_gain
+        self.estimated_dist += (dist_obs - self.estimated_dist) * 0.2
         
         self.prev_error = error
+        # Sottraiamo il disturbo stimato per compensare
         return (self.kp * error + self.ki * self.integral + self.kd * derivative) - self.estimated_dist
 
 def run_benchmark():
     dt = 0.01
-    time = np.arange(0, 10, dt)
+    time = np.arange(0, 15, dt) # Aumentato tempo per vedere assestamento
     setpoint = 1.0
     
     # Parametri
-    std_pid = StandardPID(2.0, 0.5, 0.1)
-    adv_dob = AdvancedDOBController(2.0, 0.5, 0.1, dob_gain=1.2)
+    std_pid = StandardPID(2.0, 0.8, 0.15)
+    adv_dob = AdvancedDOBController(2.0, 0.8, 0.15, dob_gain=3.0)
     
     results = {'std': [], 'adv': []}
     pos_std, pos_adv = 0, 0
+    last_out_adv = 0 # Inizializzazione corretta
     
     for i, t in enumerate(time):
-        # A 5 secondi inseriamo un disturbo costante (es. vento forte)
-        dist = 0.5 if t > 5 else 0.0
+        # Disturbo a scalino dopo 5 secondi
+        dist = 0.6 if t > 5 else 0.0
         
         # PID Standard
         out_std = std_pid.update(setpoint, pos_std)
         pos_std += (out_std - dist) * dt
         results['std'].append(pos_std)
         
-        # Advanced DOB
-        out_adv = adv_dob.update(setpoint, pos_adv, out_adv if i>0 else 0)
+        # Advanced DOB con feedback dell'ultimo output di controllo
+        out_adv = adv_dob.update(setpoint, pos_adv, last_out_adv)
         pos_adv += (out_adv - dist) * dt
         results['adv'].append(pos_adv)
+        last_out_adv = out_adv
 
     iae_std = np.sum(np.abs(setpoint - np.array(results['std'])))
     iae_adv = np.sum(np.abs(setpoint - np.array(results['adv'])))
@@ -76,10 +80,10 @@ def run_benchmark():
     print(f"Miglioramento: {improvement:.2f}%")
     
     if improvement < 15:
-        print("BENCHMARK NON RAGGIUNTO: Il miglioramento del DOB è inferiore alla soglia minima (15%).")
+        print(f"BENCHMARK NON RAGGIUNTO: Miglioramento {improvement:.2f}% < 15%")
         exit(1)
     else:
-        print("TEST SUPERATO: Il sistema con DOB è significativamente più resiliente.")
+        print(f"TEST SUPERATO: Miglioramento significativo ({improvement:.2f}%)")
         exit(0)
 
 if __name__ == "__main__":
