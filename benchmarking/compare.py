@@ -65,8 +65,8 @@ def run_benchmark():
         pos_adv += (out_adv - dist) * dt
         results['adv'].append(pos_adv)
 
-    iae_std = np.sum(np.abs(setpoint - np.array(results['std'])))
-    iae_adv = np.sum(np.abs(setpoint - np.array(results['adv'])))
+    iae_std = np.sum(np.abs(setpoint - np.array(results['std']))))
+    iae_adv = np.sum(np.abs(setpoint - np.array(results['adv']))))
     
     print(f"--- RISULTATI BENCHMARK ---")
     print(f"IAE (Integral Absolute Error) - PID Standard: {iae_std:.4f}")
@@ -76,7 +76,7 @@ def run_benchmark():
     print(f"Miglioramento: {improvement:.2f}%")
     
     if improvement < 15:
-        print("TEST FALLITO: Il beneficio del DOB è troppo basso.")
+        print("BENCHMARK NON RAGGIUNTO: Il miglioramento del DOB è inferiore alla soglia minima (15%).")
         exit(1)
     else:
         print("TEST SUPERATO: Il sistema con DOB è significativamente più resiliente.")
