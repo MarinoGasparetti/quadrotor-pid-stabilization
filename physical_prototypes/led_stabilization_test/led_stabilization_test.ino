@@ -28,14 +28,10 @@
 #define PIN_LED_RL 4
 #define PIN_LED_RR 5
 
-// ── PWM ESP32 (ledcWrite) ─────────────────────────────────────────────
-// ESP32 non usa analogWrite nativo: usa LEDC peripheral
+// ── PWM ESP32 (Arduino Core v3.x API) ────────────────────────────────
+// ledcAttach(pin, freq, resolution) + ledcWrite(pin, duty) — no canali
 #define PWM_FREQ       5000
 #define PWM_RESOLUTION 8      // 8-bit → 0-255
-#define CH_FL          0
-#define CH_FR          1
-#define CH_RL          2
-#define CH_RR          3
 
 // ── MPU-6050 ──────────────────────────────────────────────────────────
 #define MPU_ADDR        0x68
@@ -74,39 +70,35 @@ float angle_pitch = 0;
 float angle_roll  = 0;
 
 // ─────────────────────────────────────────────────────────────────────
-void led_write(uint8_t ch, int val) {
-  ledcWrite(ch, constrain(val, 0, 255));
+void led_write(uint8_t pin, int val) {
+  ledcWrite(pin, constrain(val, 0, 255));
 }
 
 // ─────────────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
 
-  // LEDC setup (ESP32 PWM)
-  ledcSetup(CH_FL, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(CH_FR, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(CH_RL, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(CH_RR, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(PIN_LED_FL, CH_FL);
-  ledcAttachPin(PIN_LED_FR, CH_FR);
-  ledcAttachPin(PIN_LED_RL, CH_RL);
-  ledcAttachPin(PIN_LED_RR, CH_RR);
+  // LEDC setup (ESP32 Arduino Core v3.x)
+  ledcAttach(PIN_LED_FL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttach(PIN_LED_FR, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttach(PIN_LED_RL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttach(PIN_LED_RR, PWM_FREQ, PWM_RESOLUTION);
 
   // Boot signal: tutti al minimo
-  led_write(CH_FL, 10);
-  led_write(CH_FR, 10);
-  led_write(CH_RL, 10);
-  led_write(CH_RR, 10);
+  led_write(PIN_LED_FL, 10);
+  led_write(PIN_LED_FR, 10);
+  led_write(PIN_LED_RL, 10);
+  led_write(PIN_LED_RR, 10);
 
   Wire.begin(I2C_SDA, I2C_SCL);
   mpu_init();
   calibrate_accel();
 
   // LED al base throttle → "in volo virtuale"
-  led_write(CH_FL, BASE_THROTTLE);
-  led_write(CH_FR, BASE_THROTTLE);
-  led_write(CH_RL, BASE_THROTTLE);
-  led_write(CH_RR, BASE_THROTTLE);
+  led_write(PIN_LED_FL, BASE_THROTTLE);
+  led_write(PIN_LED_FR, BASE_THROTTLE);
+  led_write(PIN_LED_RL, BASE_THROTTLE);
+  led_write(PIN_LED_RR, BASE_THROTTLE);
 
   last_time_us = micros();
 
@@ -143,10 +135,10 @@ void loop() {
   int rl = BASE_THROTTLE - (int)(out_pitch) - (int)(out_roll);
   int rr = BASE_THROTTLE - (int)(out_pitch) + (int)(out_roll);
 
-  led_write(CH_FL, fl);
-  led_write(CH_FR, fr);
-  led_write(CH_RL, rl);
-  led_write(CH_RR, rr);
+  led_write(PIN_LED_FL, fl);
+  led_write(PIN_LED_FR, fr);
+  led_write(PIN_LED_RL, rl);
+  led_write(PIN_LED_RR, rr);
 
   Serial.print(millis());        Serial.print(',');
   Serial.print(angle_pitch, 2);  Serial.print(',');
