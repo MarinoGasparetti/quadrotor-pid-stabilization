@@ -3,84 +3,92 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-class WindDisturbanceSim:
-    """Simula l'effetto della logica DisturbanceObserver su un drone"""
-    def __init__(self, kp, kd, wind_sensitivity=0.5):
+class QuadrotorCoupledSim:
+    """Simula il drone con accoppiamento tra gli assi (Rimbalzo in Aria)"""
+    def __init__(self, kp, kd, coupling_factor=0.3):
         self.kp = kp
         self.kd = kd
-        self.alpha = wind_sensitivity 
-        self.prev_error = 0
+        self.coupling = coupling_factor # Quanto il Pitch influisce sul Roll
+        self.prev_pitch_err = 0
+        self.prev_roll_err = 0
         self.initialized = False
 
-    def compute(self, user_pitch, current_pitch, dt, external_wind):
-        error = user_pitch - current_pitch
+    def compute(self, target, current_p, current_r, dt):
+        # PID Pitch
+        p_err = target[0] - current_p
         
-        # Inizializzazione per evitare spike a t=0
         if not self.initialized:
-            self.prev_error = error
+            self.prev_pitch_err = p_err
+            self.prev_roll_err = target[1] - current_r
             self.initialized = True
-            return 0.0, 0.0
+            
+        p_der = (p_err - self.prev_pitch_err) / dt
+        p_out = (self.kp * p_err) + (self.kd * p_der)
+        
+        # PID Roll (Cerca di stare a 0)
+        r_err = target[1] - current_r
+        r_der = (r_err - self.prev_roll_err) / dt
+        r_out = (self.kp * r_err) + (self.kd * r_der)
 
-        # Calcolo derivata errore marginale
-        derivative_error = (error - self.prev_error) / dt
+        # Accoppiamento: Una correzione forte di Pitch genera disturbo su Roll
+        # Simula asimmetria motori durante manovre brusche
+        roll_disturbance = p_out * self.coupling
         
-        # Correzione con clamping a +/- 20.0 (limite fisico motori)
-        correction = np.clip(self.alpha * derivative_error, -20.0, 20.0)
+        self.prev_pitch_err = p_err
+        self.prev_roll_err = r_err
         
-        effective_setpoint = user_pitch + correction
-        output = (self.kp * (effective_setpoint - current_pitch)) + (self.kd * derivative_error)
-        
-        self.prev_error = error
-        return output, correction
+        return p_out, r_out + roll_disturbance
 
 def run_simulation():
     dt = 0.01
-    time = np.arange(0, 10, dt)
-    user_pitch = 20.0  
-    current_pitch = 0.0
-    velocity = 0.0
+    time = np.arange(0, 8, dt)
+    target = [15.0, 0.0] # 15° Pitch, 0° Roll
     
-    sim = WindDisturbanceSim(kp=1.5, kd=0.4, wind_sensitivity=0.8)
-    sim.prev_error = user_pitch - current_pitch  # evita spike derivativo al t=0
+    # Stato: [pitch, roll, vel_p, vel_r]
+    state = np.array([0.0, 0.0, 0.0, 0.0])
+    # Gain volutamente aggressivi per mostrare l'oscillazione
+    sim = QuadrotorCoupledSim(kp=2.5, kd=0.6, coupling_factor=0.5)
     
-    pitches = []
-    corrections = []
-    wind_profile = []
-
-    for i, t in enumerate(time):
-        wind = 15.0 if 4.0 <= t <= 6.0 else 0.0
-        disturbed_pitch = current_pitch - (wind * 0.05)
-        
-        accel, corr = sim.compute(user_pitch, disturbed_pitch, dt, wind)
-        
-        velocity += accel * dt
-        current_pitch += velocity * dt
-        
-        pitches.append(current_pitch)
-        corrections.append(corr)
-        wind_profile.append(wind)
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
+    history = []
     
-    ax1.plot(time, pitches, label='Pitch Reale del Drone', color='blue')
-    ax1.axhline(y=user_pitch, color='red', linestyle='--', label='Target Utente')
-    ax1.fill_between(time, 0, wind_profile, color='gray', alpha=0.2, label='Raffica di Vento')
-    ax1.set_title("Risposta al Vento con Disturbance Observer (Senza Spike)")
-    ax1.set_ylabel("Gradi Pitch")
-    ax1.legend()
-    ax1.grid(True)
+    for t in time:
+        p_out, r_out = sim.compute(target, state[0], state[1], dt)
+        
+        # Dinamica con Inerzia e smorzamento aerodinamico
+        # Accel = (Coppia Motori - Attrito Aria) / Inerzia
+        accel_p = (p_out - (state[2] * 0.15)) 
+        accel_r = (r_out - (state[3] * 0.15))
+        
+        state[2] += accel_p * dt
+        state[3] += accel_r * dt
+        state[0] += state[2] * dt
+        state[1] += state[3] * dt
+        
+        history.append(state.copy())
 
-    ax2.plot(time, corrections, label='Correzione Observer (Offset)', color='green')
-    ax2.set_title("Sforzo dell'Observer (Clamped & Smooth)")
-    ax2.set_ylabel("Offset Correttivo")
-    ax2.set_xlabel("Tempo (s)")
-    ax2.set_ylim(-25, 25) # Zoom sul range reale
-    ax2.legend()
-    ax2.grid(True)
+    history = np.array(history)
+    
+    plt.figure(figsize=(12, 7))
+    plt.subplot(2, 1, 1)
+    plt.plot(time, history[:, 0], label='Pitch Ang (deg)', color='blue', linewidth=2)
+    plt.axhline(y=target[0], color='red', linestyle='--', label='Target Pitch')
+    plt.title("Simulazione Rimbalzo: Stabilizzazione Pitch con Accoppiamento")
+    plt.ylabel("Gradi")
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(2, 1, 2)
+    plt.plot(time, history[:, 1], label='Roll Ang (deg)', color='orange', linewidth=2)
+    plt.axhline(y=target[1], color='black', linestyle='--', label='Target Roll')
+    plt.title("Effetto Parassita sul Roll (Rimbalzo in Aria)")
+    plt.xlabel("Tempo (s)")
+    plt.ylabel("Gradi")
+    plt.legend()
+    plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig('simulation/wind_rejection_result.png')
-    print("Simulazione completata. Risultati in simulation/wind_rejection_result.png")
+    plt.savefig('simulation/coupled_rebound_sim.png')
+    print("Simulazione completata. Grafico: simulation/coupled_rebound_sim.png")
 
 if __name__ == "__main__":
     run_simulation()
