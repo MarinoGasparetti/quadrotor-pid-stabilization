@@ -49,17 +49,17 @@ class DOBControllerStabilized:
 
 def run_benchmark():
     dt = 0.01
-    time = np.arange(0, 10, dt)
+    time = np.arange(0, 20, dt)
     setpoint = 20.0 
     
-    std_pid = StandardPID(1.5, 0.5, 0.4)
-    dob_sys = DOBControllerStabilized(1.5, 0.5, 0.4, dob_gain=0.15)
-    
+    std_pid = StandardPID(1.2, 0.3, 1.8)
+    dob_sys = DOBControllerStabilized(1.2, 0.3, 1.8, dob_gain=0.15)
+
     res_std, res_dob = [], []
     pos_std, pos_dob = 0.0, 0.0
     vel_std, vel_dob = 0.0, 0.0
     last_eff_dob = 0
-    inertia = 0.8 
+    inertia = 0.8
 
     for t in time:
         # Disturbo reale (Vento)
