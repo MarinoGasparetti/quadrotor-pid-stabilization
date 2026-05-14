@@ -41,6 +41,7 @@ def run_simulation():
     velocity = 0.0
     
     sim = WindDisturbanceSim(kp=1.5, kd=0.4, wind_sensitivity=0.8)
+    sim.prev_error = user_pitch - current_pitch  # evita spike derivativo al t=0
     
     pitches = []
     corrections = []
