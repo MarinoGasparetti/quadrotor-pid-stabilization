@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 class StandardPID:
@@ -77,6 +79,7 @@ def run_benchmark():
         results['adv'].append(pos_adv)
         last_out_adv = out_adv
 
+    # Calcolo metriche
     iae_std = np.sum(np.abs(setpoint - np.array(results['std'])))
     iae_adv = np.sum(np.abs(setpoint - np.array(results['adv'])))
     
@@ -87,8 +90,22 @@ def run_benchmark():
     improvement = ((iae_std - iae_adv) / iae_std) * 100
     print(f"Miglioramento: {improvement:.2f}%")
     
-    # Nota: con dob_gain basso il miglioramento potrebbe essere < 15%, 
-    # ma il sistema è ora stabile.
+    # Generazione Grafico
+    plt.figure(figsize=(12, 6))
+    plt.plot(time, results['std'], label=f'Standard PID (IAE: {iae_std:.2f})', color='orange', alpha=0.8)
+    plt.plot(time, results['adv'], label=f'Advanced DOB (IAE: {iae_adv:.2f})', color='blue', linewidth=2)
+    plt.axhline(y=setpoint, color='red', linestyle='--', label='Setpoint')
+    plt.axvline(x=5, color='gray', linestyle=':', label='Inizio Disturbo (Step)')
+    plt.title("Confronto Performance: PID Standard vs Advanced DOB (Stabile)")
+    plt.xlabel("Tempo (s)")
+    plt.ylabel("Posizione / Output")
+    plt.legend()
+    plt.grid(True, which='both', linestyle='--', alpha=0.5)
+    
+    plot_path = 'benchmarking/benchmark_results.png'
+    plt.savefig(plot_path)
+    print(f"Grafico salvato in: {plot_path}")
+
     if improvement < 5:
         print(f"INFO: Miglioramento marginale, ma stabilità garantita.")
         exit(0)
