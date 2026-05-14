@@ -17,38 +17,47 @@ The system is designed around a **Multi-Rate Concurrent Task Scheduler**, separa
 
 ### 2. Performance Benchmarks
 
-The system performance is automatically validated against a standard PID controller under realistic environmental conditions (wind gusts + measurement noise).
+Validated against a standard PID controller under realistic conditions: step wind gust (force=15, t=4s–6s) + gaussian measurement noise (σ=0.02).
 
 | Metric | Standard PID | Advanced DOB | Improvement |
 |--------|--------------|--------------|-------------|
-| **IAE (Integral Absolute Error)** | 11.85 | 9.42 | **+20.51%** |
-| **Recovery Time (5N gust)** | ~1.8s | ~0.6s | **+66%** |
+| **IAE (Integral Absolute Error)** | 147.43 | 117.09 | **+20.58%** |
+| **Threshold (CI gate)** | — | — | > 15% required |
+| **Test Result** | — | — | **PASSED** |
 
-> **Note**: The Advanced DOB architecture shows significant superiority in noisy environments, maintaining structural stiffness where traditional PID systems begin to oscillate or drift.
+> The Advanced DOB maintains a consistent 20%+ IAE advantage over standard PID under step disturbance. The CI/CD pipeline enforces a minimum 15% improvement threshold on every commit.
 
-### 3. Implementation Details (C++)
+![Benchmark PID vs DOB](benchmarking/benchmark_results.png)
 
-*   **`core/pid_controller.hpp`**: Thread-safe implementation of a dual-profile PID. Features anti-windup (conditional integration) and output clamping.
-*   **`core/disturbance_observer.hpp`**: Stateless observer that computes the required counter-torque based on the delta between expected and measured acceleration.
-*   **`core/scheduler.hpp`**: Priority-based task orchestrator using a dedicated thread pool to ensure consistent cycle times (dt) across different control layers.
+### 3. Wind Rejection Simulation
 
-### 4. Simulation & Verification
+The `simulation/pid_sim.py` runs a 1D pitch dynamics model with a wind gust injected between t=4s and t=6s. The Disturbance Observer corrects in real-time, keeping the drone on the 20° pitch setpoint with bounded correction effort (clamped to ±20).
 
-The provided Python suite (`simulation/pid_sim.py`) validates the control law using a 1D/2D dynamical model.
-The automated benchmark suite (`benchmarking/compare.py`) provides the quantitative comparison used in the CI/CD pipeline.
+![Wind Rejection](simulation/wind_rejection_result.png)
+
+### 4. Implementation Details (C++)
+
+*   **`core/pid_controller.hpp`**: Thread-safe dual-profile PID with anti-windup (conditional integration) and output clamping.
+*   **`core/disturbance_observer.hpp`**: Observer with initialization guard (no spike at t=0) and correction clamping. Computes counter-torque from delta between expected and measured acceleration.
+*   **`core/scheduler.hpp`**: Priority-based task orchestrator using a dedicated thread pool to ensure consistent cycle times (dt) across control layers.
+
+### 5. Running Simulations
 
 ```bash
-# Run the performance benchmark
+# Wind rejection simulation → simulation/wind_rejection_result.png
+python simulation/pid_sim.py
+
+# PID vs DOB benchmark → benchmarking/benchmark_results.png
 python benchmarking/compare.py
 ```
 
-### 5. Deployment & CI/CD
+### 6. CI/CD
 
-The system is continuously validated via GitHub Actions:
-*   **Quadrotor CI**: Compiles the C++ core and runs unit tests.
+Validated via GitHub Actions on every push:
+*   **Quadrotor CI**: Compiles C++ core and runs unit tests.
 *   **Simulation CI**: Validates basic flight stability.
-*   **Performance Benchmark**: Ensures the DOB logic maintains a performance lead > 15% over standard PID.
+*   **Performance Benchmark**: Enforces DOB improvement > 15% over standard PID. Fails build if threshold not met.
 
 ---
 **Lead Engineer:** Marino Gasparetti  
-**Status:** Validated in Simulation - Performance benchmarks met.
+**Status:** Validated in Simulation — Benchmark passed (IAE improvement: +20.58%)
