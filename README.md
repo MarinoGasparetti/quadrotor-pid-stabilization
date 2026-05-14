@@ -27,13 +27,9 @@ Validated against a standard PID controller under realistic conditions: step win
 
 > The Advanced DOB maintains a consistent 20%+ IAE advantage over standard PID under step disturbance. The CI/CD pipeline enforces a minimum 15% improvement threshold on every commit.
 
-![Benchmark PID vs DOB](benchmarking/benchmark_results.png)
-
 ### 3. Wind Rejection Simulation
 
 The `simulation/pid_sim.py` runs a 1D pitch dynamics model with a wind gust injected between t=4s and t=6s. The Disturbance Observer corrects in real-time, keeping the drone on the 20° pitch setpoint with bounded correction effort (clamped to ±20).
-
-![Wind Rejection](simulation/wind_rejection_result.png)
 
 ### 4. Implementation Details (C++)
 
