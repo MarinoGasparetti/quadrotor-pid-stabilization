@@ -23,15 +23,15 @@ To solve the **"Aerial Rebound"** (overshoot caused by estimation lag during sud
 
 ### 3. Performance Benchmarks
 
-Validated against a standard PID controller under realistic conditions: high-inertia dynamics (0.8), coupled Pitch/Roll axes, and sudden step wind gusts.
+Validated against a standard PID controller: step wind gust (force=12N, t=3s–5s), inertia=0.8, 20s window.
 
-| Metric | Standard PID | Adaptive DOB (Fixed) | Result |
-|--------|--------------|----------------------|-------------|
-| **Max Overshoot (Peak)** | ~55.0° | **29.56°** | **-46% Overshoot** |
-| **Stability (Aerial Rebound)** | High Oscillations | **Damped / Mediated** | **PASSED** |
-| **T=0 Spike Initialization** | Present (Legacy) | **Eliminated (Lazy Init)** | **FIXED** |
+| Metric | Standard PID | DOB + Active Reset | Improvement |
+|--------|--------------|--------------------|-------------|
+| **IAE (Integral Absolute Error)** | 49.51 | 41.83 | **+15.51%** |
+| **Settling time** | ~13s | **~6s** | **-54%** |
+| **CI gate (IAE >15%)** | — | — | **PASSED** |
 
-> The Adaptive DOB architecture eliminates the 200%+ divergence risk of standard DOBs by using energetic-mediated resets, outperforming PID by damping the recovery phase effectively.
+> The DOB with Active Evaluation Layer converges to setpoint in ~6s vs ~13s for standard PID. The observer (gain=0.6, fc=0.7) detects residual disturbance fast enough to damp post-gust oscillations before the PID integral accumulates excess error.
 
 ### 4. Implementation Details (C++)
 
@@ -53,7 +53,7 @@ python benchmarking/compare.py
 
 Validated via GitHub Actions on every push:
 *   **Quadrotor CI**: Compiles C++ core.
-*   **Performance Benchmark**: Verifies that the Active Evaluation Layer keeps overshoot within safe bounds (<35° in peak).
+*   **Performance Benchmark**: Enforces DOB IAE improvement > 15% over standard PID. Fails build if threshold not met.
 
 ---
 **Lead Engineer:** Marino Gasparetti  
