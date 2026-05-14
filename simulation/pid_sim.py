@@ -64,7 +64,7 @@ def run_simulation():
     
     ax1.plot(time, pitches, label='Pitch Reale del Drone', color='blue')
     ax1.axhline(y=user_pitch, color='red', linestyle='--', label='Target Utente')
-    ax1.fill_between(time, 4, 6, color='gray', alpha=0.2, label='Raffica di Vento')
+    ax1.fill_between(time, 0, wind_profile, color='gray', alpha=0.2, label='Raffica di Vento')
     ax1.set_title("Risposta al Vento con Disturbance Observer (Senza Spike)")
     ax1.set_ylabel("Gradi Pitch")
     ax1.legend()
